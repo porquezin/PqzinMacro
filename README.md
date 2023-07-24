@@ -10,4 +10,5 @@ O PQZIN-MACRO é um programa que oferece uma macro de mensagens personalizadas p
 - F12:   Sair do programa
 
 # To-do
-- Interface grafica
+- Otimização do codigo
+- Melhorar a interface
