@@ -2,84 +2,160 @@ import os
 import json
 import time
 import keyboard
+import tkinter as tk
+from tkinter import messagebox
 
 
-class FrasesManager:
+class PhrasesManager:
     def __init__(self):
-        self.file_path = 'text.json'
+        self.file_path = './texts.json'
+        self.frases = {}
+        self.hotkey = tk.StringVar()
+        self.text = tk.StringVar()
+        self.hook_ids = {}
+        self.load_phrases()
+        self.bind_keys()
 
-    def carregar_frases(self):
+    def load_phrases(self):
         try:
-            with open(self.file_path, 'r', encoding="utf-8") as arquivo:
-                self.frases = json.load(arquivo)
-        except FileNotFoundError:
-            self.frases = {}
-        except json.JSONDecodeError:
+            with open(self.file_path, 'r', encoding="utf-8") as file:
+                self.frases = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
             self.frases = {}
 
-    def mostrar_frases(self):
-        for key, frase in self.frases.items():
-            print(f"Tecla {key}: {frase}")
+    def show_phrases(self):
+        phrases_window = tk.Toplevel()
+        phrases_window.configure(bg="#282c44")
+        phrases_window.title("Registered Phrases")
+        phrases_window.geometry("160x220")
+        phrases_listbox = tk.Listbox(
+            phrases_window, selectmode=tk.SINGLE, background="#282c34", foreground="white")
+        phrases_listbox.pack()
 
-    def criar_frase(self):
-        key = input("Tecla: ").upper()
-        keys = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
-        if key not in keys:
-            print("Invalid key")
-            return
-        frase = input(f"Frase <{key}>: ")
+        for key, phrase in self.frases.items():
+            phrases_listbox.insert(tk.END, f"Key {key}: {phrase}")
 
-        self.frases[key] = frase
+        delete_button = tk.Button(
+            phrases_window, text="Delete", command=lambda: self.delete_phrase(phrases_listbox), background="#282c34", foreground="white")
+        delete_button.pack()
 
-        with open(self.file_path, 'w', encoding="utf-8") as arquivo:
-            json.dump(self.frases, arquivo)
+    def delete_phrase(self, listbox):
+        selected_index = listbox.curselection()
+        if selected_index:
+            selected_key = listbox.get(selected_index[0]).split()[
+                1].replace(':', '')
+            del self.frases[selected_key]
+            with open(self.file_path, 'w', encoding="utf-8") as file:
+                json.dump(self.frases, file)
+            listbox.delete(selected_index)
+        else:
+            messagebox.showinfo("Warning", "Please select a phrase to delete.")
 
-    def escrever_frase(self, key):
+    def create_phrase(self):
+        self.unbind_keys()
+        create_phrase_window = tk.Toplevel()
+        create_phrase_window.configure(bg="#282c34")
+        create_phrase_window.title("Create New Message")
+        create_phrase_window.geometry("200x120")
+
+        label = tk.Label(create_phrase_window, text="Hotkey:",
+                         background="#282c34", foreground="white")
+        label.pack()
+
+        hotkey_entry = tk.Entry(
+            create_phrase_window, textvariable=self.hotkey, state='readonly', width=5)
+        hotkey_entry.bind("<KeyPress>", self.get_hotkey)
+        hotkey_entry.pack()
+
+        label = tk.Label(create_phrase_window, text="Message:",
+                         width=150, background="#282c34", foreground="white")
+        label.pack()
+
+        text_entry = tk.Entry(create_phrase_window,
+                              textvariable=self.text, state='normal', background="#282c34", foreground="white")
+        text_entry.pack()
+
+        save_button = tk.Button(
+            create_phrase_window, text="Save", command=self.save_message(create_phrase_window))
+        save_button.pack()
+
+    def unbind_keys(self):
+        for _, hook_id in self.hook_ids.items():
+            keyboard.unhook(hook_id)
+
+    def get_hotkey(self, event=None):
+        key = event.keysym
+        self.hotkey.set(key)
+
+    def save_message(self, window):
+        def save_and_close():
+            hotkey = self.hotkey.get()
+            text = self.text.get()
+            self.frases[hotkey] = text
+            with open(self.file_path, 'w', encoding="utf-8") as file:
+                json.dump(self.frases, file)
+            window.destroy()
+            self.bind_keys()
+
+        return save_and_close
+
+    def write_phrase(self, key):
         if key not in self.frases:
             return
 
-        frase = self.frases[key]
+        phrase = self.frases[key]
 
+        time.sleep(0.01)
         keyboard.press_and_release("shift+enter")
         time.sleep(0.01)
-        keyboard.write(frase)
+        keyboard.write(phrase)
         keyboard.press_and_release('enter')
+
+    def bind_keys(self):
+        for key, _ in self.frases.items():
+            self.callback(key)
+
+    def callback(self, key):
+        hook_id = keyboard.on_press_key(key, lambda _: self.write_phrase(key))
+        self.hook_ids[key] = hook_id
+
+
+class Application(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("PQZIN-MACRO")
+        self.configure(bg='#282c34')
+        self.phrases_manager = PhrasesManager()
+        self.create_widgets()
+
+    def create_widgets(self):
+
+        title = """====================================
+PQZIN-MACRO TO LEAGUE OF LEGENDS
+==================================================="""
+        help_label = tk.Label(self, text=title,
+                              background="#282c34", foreground="white")
+        help_label.pack()
+
+        phrases_button = tk.Button(
+            self, text="Show Registered Phrases", command=self.phrases_manager.show_phrases, background="#282c34", foreground="white")
+        phrases_button.pack()
+
+        create_phrase_button = tk.Button(
+            self, text="Create New Phrase", command=self.phrases_manager.create_phrase, background="#282c34", foreground="white")
+        create_phrase_button.pack()
+
+    def on_exit(self):
+        if messagebox.askyesno("Exit", "Do you want to exit the program?"):
+            self.destroy()
 
 
 def main():
-    frases_manager = FrasesManager()
-    frases_manager.carregar_frases()
-
-    keyboard.on_press_key("F1", lambda _: frases_manager.escrever_frase("F1"))
-    keyboard.on_press_key("F2", lambda _: frases_manager.escrever_frase("F2"))
-    keyboard.on_press_key("F3", lambda _: frases_manager.escrever_frase("F3"))
-    keyboard.on_press_key("F4", lambda _: frases_manager.escrever_frase("F4"))
-    keyboard.on_press_key("F5", lambda _: frases_manager.escrever_frase("F5"))
-    keyboard.on_press_key("F6", lambda _: frases_manager.escrever_frase("F6"))
-    keyboard.on_press_key("F7", lambda _: frases_manager.escrever_frase("F7"))
-    keyboard.on_press_key("F8", lambda _: frases_manager.escrever_frase("F8"))
-
-    keyboard.on_press_key("F9", lambda _: frases_manager.mostrar_frases())
-    keyboard.on_press_key("F10", lambda _: frases_manager.criar_frase())
-
-    keyboard.wait("F12")
-    print("Obrigado por usar!")
+    app = Application()
+    app.resizable(False, False)
+    app.protocol("WM_DELETE_WINDOW", app.on_exit)
+    app.mainloop()
 
 
 if __name__ == "__main__":
-    os.system("cls")
-    help = """                /-----------------\\
-                | <-PQZIN-MACRO-> |
-                \-----------------/
-================== MENU DE AJUDA ==================
-/    - F1-F8: Escrever frase associada à tecla    /
-\    - F9:    Mostrar frases cadastradas          \\
-/    - F10:   Criar nova frase                    /
-\    - F12:   Sair do programa                    \\
-===================================================
-    """
-    try:
-        print(help)
-        main()
-    except KeyboardInterrupt:
-        print("Obrigado por usar!")
+    main()
